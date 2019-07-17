@@ -4,6 +4,7 @@ import json
 import time
 import dotenv
 import random
+import urllib3
 import xmltodict
 from DataCaseParser import DataCaseFile
 from urllib.parse import quote, unquote
@@ -53,17 +54,17 @@ class WeChatWidgetSearchTest(TaskSet):
             return []
         data = []
         var_case_key = os.getenv("DATA_CASE_VAR", '#data')
-        cases = handler.list_case_scope(var_case_key)
+        cases = handler.list_case_scope(data_list, key=var_case_key)
         if 0 == len(cases):
             return []
         fill_case_param_key = os.getenv("FILL_CASE_PARAM_KEY", 'body')
-        if not params.get(var_case_key, False):
+        if not params.get(fill_case_param_key, False):
             return []
-        template = str(params[var_case_key])
+        template = str(params[fill_case_param_key])
         for i, val in enumerate(cases):
             item = params
             item[fill_case_param_key] = template.replace(var_case_key, val)
-            data[i] = item
+            data.append(item)
         self.data = data
         return data
 
@@ -77,18 +78,16 @@ class WeChatWidgetSearchTest(TaskSet):
         if len(data) == 0:
             print("error request test")
             return
-        self.save_file(file + self.get_ext_html(), data)
         data_json = self.parse(data)
         if data_json is None:
+            self.save_file(file + self.get_ext_html(), data)
             return
         obj = json.loads(data_json, encoding='utf-8')
-        self.save_file(file + self.get_ext_json(), data_json)
         if obj is None:
+            self.save_file(file + self.get_ext_json(), data_json)
             return
         xml_data = self.parse_xml(obj)
-        self.save_file(file + self.get_ext_xml(), xml_data)
         xml_obj = xmltodict.parse(xml_data, encoding='utf-8')
-        print(isinstance(xml_obj, dict))
         if isinstance(xml_obj, dict):
             if not xml_obj.get('xml', False):
                 return
@@ -97,6 +96,8 @@ class WeChatWidgetSearchTest(TaskSet):
                 return
             data = el['Content']
             self.save_file(file + "_query" + self.get_ext_json(), data)
+        else:
+            self.save_file(file + self.get_ext_xml(), xml_data)
 
     @staticmethod
     def get_ext_html():
@@ -176,8 +177,9 @@ class WeChatWidgetSearchTest(TaskSet):
         # case data
         data = self.get_data()
         count = len(data)
+        print(data)
         # 随机抽取数据
-        index = random.randint(0, count)
+        index = random.randint(0, count - 1)
         if 0 == count:
             print("error : empty data case")
             exit(-1)
@@ -213,5 +215,6 @@ class WebsiteUser(HttpLocust):
     # 添加环境变量初始化
     def __init__(self):
         super().__init__()
+        urllib3.disable_warnings()
         env_file = os.path.dirname(os.path.abspath(__file__)) + self.env_path
         dotenv.load_dotenv(env_file)
