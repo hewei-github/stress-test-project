@@ -55,6 +55,7 @@ class WeChatWidgetSearchTest(TaskSet):
         data = []
         var_case_key = os.getenv("DATA_CASE_VAR", '#data')
         cases = handler.list_case_scope(data_list, key=var_case_key)
+        # print(cases)
         if 0 == len(cases):
             return []
         fill_case_param_key = os.getenv("FILL_CASE_PARAM_KEY", 'body')
@@ -62,7 +63,7 @@ class WeChatWidgetSearchTest(TaskSet):
             return []
         template = str(params[fill_case_param_key])
         for i, val in enumerate(cases):
-            item = params
+            item = params.copy()
             item[fill_case_param_key] = template.replace(var_case_key, val)
             data.append(item)
         self.data = data
@@ -177,15 +178,14 @@ class WeChatWidgetSearchTest(TaskSet):
         # case data
         data = self.get_data()
         count = len(data)
-        print(data)
         # 随机抽取数据
         index = random.randint(0, count - 1)
         if 0 == count:
             print("error : empty data case")
             exit(-1)
-        if self.isFine != count:
-            index = self.isFine
-            self.isFine = self.isFine + 1
+        # fs = open(self.current_dir() + "/storage/data.json", mode='w+', encoding='utf-8')
+        # json.dump(data, fs, ensure_ascii=False)
+        # exit(1)
         data = data[index]
         # header
         header = self.header_params()
