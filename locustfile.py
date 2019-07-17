@@ -2,7 +2,10 @@ import re
 import os
 import json
 import time
+import dotenv
+import random
 import xmltodict
+from DataCaseParser import DataCaseFile
 from urllib.parse import quote, unquote
 from locust import HttpLocust, TaskSet, task
 
@@ -13,28 +16,99 @@ from locust import HttpLocust, TaskSet, task
 
 class WeChatWidgetSearchTest(TaskSet):
     path = "/debug/cgi-bin/callbackagent"
+    data = []
+    isFine = 0
+
+    '''
+        cookie 文件
+    '''
+
+    def cookie_params(self):
+        cookies_file = self.current_dir() + os.getenv('TEST_COOKIES_FILE', "/config/cookies.json")
+        jar = self.load_json_file(cookies_file)
+        return jar
+
+    '''
+        头部参数
+    '''
+
+    def header_params(self):
+        headers_file = self.current_dir() + os.getenv('TEST_HEADERS_FILE', "/config/header.json")
+        headers = self.load_json_file(headers_file)
+        return headers
+
+    '''
+          获取压测用例数据
+    '''
+
+    def get_data(self):
+        if 0 != len(self.data):
+            return self.data
+        handler = DataCaseFile()
+        file = self.current_dir() + os.getenv('TEST_CASES_FILE', "/config/data.case")
+        param_file = self.current_dir() + os.getenv('TEST_PARAMS_FILE', "/config/params.json")
+        params = self.load_json_file(param_file)
+        data_list = handler.load(file)
+        if data_list is None or not isinstance(params, dict):
+            return []
+        data = []
+        var_case_key = os.getenv("DATA_CASE_VAR", '#data')
+        cases = handler.list_case_scope(var_case_key)
+        if 0 == len(cases):
+            return []
+        fill_case_param_key = os.getenv("FILL_CASE_PARAM_KEY", 'body')
+        if not params.get(var_case_key, False):
+            return []
+        template = str(params[var_case_key])
+        for i, val in enumerate(cases):
+            item = params
+            item[fill_case_param_key] = template.replace(var_case_key, val)
+            data[i] = item
+        self.data = data
+        return data
 
     '''
       保存压测中的请求数据
     '''
 
     def save(self, data):
-        file = self.current_dir() + '/storage/' + str(int(time.time()))
+        storage_dir = '/' + os.getenv('TEST_STORAGE_DIR', 'storage') + '/'
+        file = self.current_dir() + storage_dir + str(int(time.time()))
         if len(data) == 0:
             print("error request test")
             return
-        self.save_file(file + "_res.html", data)
+        self.save_file(file + self.get_ext_html(), data)
         data_json = self.parse(data)
         if data_json is None:
             return
         obj = json.loads(data_json, encoding='utf-8')
-        self.save_file(file + "_res.json", data_json)
+        self.save_file(file + self.get_ext_json(), data_json)
         if obj is None:
             return
         xml_data = self.parse_xml(obj)
-        self.save_file(file + "_data.xml", xml_data)
+        self.save_file(file + self.get_ext_xml(), xml_data)
         xml_obj = xmltodict.parse(xml_data, encoding='utf-8')
-        print(xml_obj['xml']['Content'])
+        print(isinstance(xml_obj, dict))
+        if isinstance(xml_obj, dict):
+            if not xml_obj.get('xml', False):
+                return
+            el = xml_obj.get('xml')
+            if not isinstance(el, dict) or not el.get('Content', False):
+                return
+            data = el['Content']
+            self.save_file(file + "_query" + self.get_ext_json(), data)
+
+    @staticmethod
+    def get_ext_html():
+        return os.getenv('TEST_SAVE_HTML_EXT', '_res.html')
+
+    @staticmethod
+    def get_ext_json():
+        return os.getenv('TEST_SAVE_JSON_EXT', '_res.json')
+
+    @staticmethod
+    def get_ext_xml():
+        return os.getenv('TEST_SAVE_XML_EXT', '_res.xml')
 
     @staticmethod
     def save_file(file, data=None):
@@ -50,12 +124,11 @@ class WeChatWidgetSearchTest(TaskSet):
     '''
 
     @staticmethod
-    def parse_xml(obj):
-        if obj is None or not isinstance(obj, dict):
+    def parse_xml(obj: dict):
+        key = os.getenv("DATA_XML_KEY", "decrypt_xml")
+        if not obj.get(key, False):
             return
-        if obj['decrypt_xml'] is None or obj['decrypt_xml'] == "":
-            return
-        data = obj['decrypt_xml']
+        data = obj[key]
         xml_data = unquote(data)
         return xml_data
 
@@ -64,24 +137,6 @@ class WeChatWidgetSearchTest(TaskSet):
         cur = os.path.abspath(__file__)
         current_dir = os.path.dirname(cur)
         return current_dir
-
-    '''
-        cookie 文件
-    '''
-
-    def cookie_params(self):
-        cookies_file = self.current_dir() + "/config/cookies.json"
-        jar = self.load_json_file(cookies_file)
-        return jar
-
-    '''
-        头部参数
-    '''
-
-    def header_params(self):
-        headers_file = self.current_dir() + "/config/header.json"
-        headers = self.load_json_file(headers_file)
-        return headers
 
     '''
         通过json 文件加载 json 对象字典
@@ -103,26 +158,11 @@ class WeChatWidgetSearchTest(TaskSet):
 
     @staticmethod
     def parse(data):
-        regexp = 'resultData = (\{.+\})'
+        regexp = os.getenv("DATA_REGEXP", "resultData = (\{.+\})")
         match = re.search(regexp, data)
         if match:
             return match.group(1)
         return None
-
-    '''
-        获取压测用例数据
-    '''
-
-    def get_data(self):
-        handler = DataCaseFile()
-        file = self.current_dir() + "/config/data.case"
-        param_file = self.current_dir() + "/config/params.json"
-        params = self.load_json_file(param_file)
-        data_list = handler.load(file)
-        if data_list is None:
-            return params
-        data = []
-        return data
 
     '''
         压测接口[任务一]
@@ -131,9 +171,20 @@ class WeChatWidgetSearchTest(TaskSet):
     @task(1)
     def index(self):
         # env
-        host = quote("https://work-api.lieduoduo.com/wechat/mini/notify")
+        host = os.getenv('TEST_HOST_URL')
+        host = quote(host)
         # case data
         data = self.get_data()
+        count = len(data)
+        # 随机抽取数据
+        index = random.randint(0, count)
+        if 0 == count:
+            print("error : empty data case")
+            exit(-1)
+        if self.isFine != count:
+            index = self.isFine
+            self.isFine = self.isFine + 1
+        data = data[index]
         # header
         header = self.header_params()
         # cookies load
@@ -149,33 +200,18 @@ class WeChatWidgetSearchTest(TaskSet):
 
 
 '''
-    测试数据加载类
-'''
-
-
-class DataCaseFile:
-    start_flag = "["
-    end_flag = "]"
-    div_flag = ":"
-    line_flag = r"\r\n"
-
-    def load(self, file):
-        if file is None or not isinstance(file, str) or 0 == len(file):
-            return None
-        fs = open(file=file, encoding='utf-8', mode='r')
-        content = fs.read()
-        if 0 == len(content):
-            return
-        lines = content.split(self.line_flag)
-        return lines
-
-
-'''
  压测web server 启动类
 '''
 
 
 class WebsiteUser(HttpLocust):
+    env_path = "/config/.env"
     task_set = WeChatWidgetSearchTest
     min_wait = 5000
     max_wait = 9000
+
+    # 添加环境变量初始化
+    def __init__(self):
+        super().__init__()
+        env_file = os.path.dirname(os.path.abspath(__file__)) + self.env_path
+        dotenv.load_dotenv(env_file)
