@@ -5,4 +5,5 @@ config/cookies.json
 config/header.json
 config/.env
 config/data.case
+config/data.json
 config/params.json
