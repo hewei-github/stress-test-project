@@ -19,6 +19,7 @@ class WeChatWidgetSearchTest(TaskSet):
     path = "/debug/cgi-bin/callbackagent"
     data = []
     isFine = 0
+    file_cache = {}
 
     '''
         cookie 文件
@@ -73,9 +74,9 @@ class WeChatWidgetSearchTest(TaskSet):
       保存压测中的请求数据
     '''
 
-    def save(self, data):
+    def save(self, data: str, index: int):
         storage_dir = '/' + os.getenv('TEST_STORAGE_DIR', 'storage') + '/'
-        file = self.current_dir() + storage_dir + str(int(time.time()))
+        file = self.current_dir() + storage_dir + str(int(time.time())) + '_' + str(index) + '_'
         if len(data) == 0:
             print("error request test")
             return
@@ -88,6 +89,9 @@ class WeChatWidgetSearchTest(TaskSet):
             self.save_file(file + self.get_ext_json(), data_json)
             return
         xml_data = self.parse_xml(obj)
+        if not xml_data:
+            self.save_file(file + self.get_ext_json(), data_json)
+            return
         xml_obj = xmltodict.parse(xml_data, encoding='utf-8')
         if isinstance(xml_obj, dict):
             if not xml_obj.get('xml', False):
@@ -99,6 +103,50 @@ class WeChatWidgetSearchTest(TaskSet):
             self.save_file(file + "_query" + self.get_ext_json(), data)
         else:
             self.save_file(file + self.get_ext_xml(), xml_data)
+
+    '''
+           获取缓存数据
+    '''
+
+    def get_cache_file_content(self, file: str, expire=3600):
+        cache = self.file_cache.get(file, False)
+        if isinstance(cache, dict) and cache.get('content', False):
+            now_time = int(time.time())
+            cached_at = cache.get('cached_at', int(time.time()))
+            if now_time - cached_at > expire:
+                self.file_cache[file] = {}
+                return None
+            print('read in cache ' + file)
+            return cache.get('content')
+        else:
+            return None
+
+    '''
+        通过json 文件加载 json 对象字典
+    '''
+
+    def load_json_file(self, file):
+        cache = self.get_cache_file_content(file)
+        if cache is not None:
+            obj = json.loads(s=cache, encoding='utf-8')
+            return obj
+        if os.path.exists(file):
+            fs = open(file=file, mode='r', encoding='utf-8')
+            content = fs.read()
+            fs.close()
+            if 0 == len(content):
+                return None
+            self.file_cache[file] = {
+                'content': content,
+                'cached_at': int(time.time()),
+            }
+            obj = json.loads(s=content, encoding='utf-8')
+            return obj
+        else:
+            return None
+
+    def __del__(self):
+        del self.file_cache, self.data
 
     @staticmethod
     def get_ext_html():
@@ -139,20 +187,6 @@ class WeChatWidgetSearchTest(TaskSet):
         cur = os.path.abspath(__file__)
         current_dir = os.path.dirname(cur)
         return current_dir
-
-    '''
-        通过json 文件加载 json 对象字典
-    '''
-
-    @staticmethod
-    def load_json_file(file):
-        if os.path.exists(file):
-            fs = open(file=file, mode='r', encoding='utf-8')
-            obj = json.load(fp=fs, encoding='utf-8')
-            fs.close()
-            return obj
-        else:
-            return None
 
     '''
         解析html结果数据
@@ -196,7 +230,7 @@ class WeChatWidgetSearchTest(TaskSet):
         req = self.client.post(url=url, data=data, json=False, headers=header, verify=False, cookies=cookies)
         if req.status_code == 200:
             print("ok")
-            self.save(data=req.text)
+            self.save(data=req.text, index=index)
         else:
             print("failed")
 

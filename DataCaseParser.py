@@ -15,12 +15,17 @@ class DataCaseFile:
     def load(self, file=""):
         if 0 == len(file) or not os.path.exists(file):
             return None
+        if os.path.exists(file + ".lock"):
+            return None
+        fs_lock = open(file + ".lock", 'w+')
+        fs_lock.close()
         fs = open(file=file, encoding='utf-8', mode='r')
         lines = []
         while True:
             line = fs.readline()
             if not line:
                 fs.close()
+                os.remove(file + ".lock")
                 break
             lines.append(line)
         if 0 == len(lines):
