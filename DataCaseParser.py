@@ -1,5 +1,6 @@
 import os
 import re
+from RedisHelp import RedisTool as Redis
 
 '''
   测试用例加载器
@@ -11,26 +12,52 @@ class DataCaseFile:
     end_flag = ']'
     div_flag = ':'
     line_flag = r'\n|\r\n'
+    cache_time = 3600
+
+    def __init__(self):
+        self.cache = Redis.instance()
+        self.cache_time = int(os.getenv('DATA_CACHE_TIME', self.cache_time))
+
+    def __del__(self):
+        del self.cache
+
+    '''
+        加入数据
+    '''
 
     def load(self, file=""):
         if 0 == len(file) or not os.path.exists(file):
             return None
         if os.path.exists(file + ".lock"):
             return None
-        fs_lock = open(file + ".lock", 'w+')
-        fs_lock.close()
+        key = 'file_' + Redis.md5(file)
+        data = self.cache.get(key)
+        if data is not None:
+            data = str(data.decode('utf-8'))
+            lines = re.split(pattern=self.line_flag, string=data)
+            del data
+            return self.scope(lines)
+        lock_key = key + "_lock"
+        if self.cache.get(lock_key) is not None:
+            return None
+        self.cache.setex(name=lock_key, value=1, time=60)
         fs = open(file=file, encoding='utf-8', mode='r')
         lines = []
         while True:
             line = fs.readline()
             if not line:
                 fs.close()
-                os.remove(file + ".lock")
                 break
             lines.append(line)
         if 0 == len(lines):
-            return
+            return None
+        self.cache.setex(name=key, value="\n".join(lines), time=self.cache_time)
+        self.cache.delete(lock_key)
         return self.scope(lines)
+
+    '''
+        作用域处理
+    '''
 
     def scope(self, lines: list):
         if len(lines) == 0:

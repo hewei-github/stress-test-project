@@ -1,3 +1,4 @@
 from DataCaseParser import DataCaseFile
 from DataSeeder import DataSeeder
-from RedisHelp import RedisHelp
+from RedisHelp import RedisTool
+from locustfile import WeChatWidgetSearchTest,WebsiteUser

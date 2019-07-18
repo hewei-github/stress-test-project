@@ -8,6 +8,7 @@ import urllib3
 import xmltodict
 from DataCaseParser import DataCaseFile
 from urllib.parse import quote, unquote
+from RedisHelp import RedisTool as Redis
 from locust import HttpLocust, TaskSet, task
 
 '''
@@ -16,10 +17,18 @@ from locust import HttpLocust, TaskSet, task
 
 
 class WeChatWidgetSearchTest(TaskSet):
-    path = "/debug/cgi-bin/callbackagent"
     data = []
-    isFine = 0
-    file_cache = {}
+    path = "/debug/cgi-bin/callbackagent"
+    is_finish_key = 'test_finish'
+    max_test_count = 3000
+
+    def __init__(self, parent):
+        print(parent)
+        super().__init__(parent)
+        self.cache = Redis.instance()
+        self.file_cache = Redis.instance(db=8)
+        self.cache_time = int(os.getenv('CACHE_TIME', 3600))
+        self.max_test_count = int(os.getenv('DATA_MAX_CASE_MAX_LEN', self.max_test_count))
 
     '''
         cookie 文件
@@ -76,20 +85,24 @@ class WeChatWidgetSearchTest(TaskSet):
 
     def save(self, data: str, index: int):
         storage_dir = '/' + os.getenv('TEST_STORAGE_DIR', 'storage') + '/'
-        file = self.current_dir() + storage_dir + str(int(time.time())) + '_' + str(index) + '_'
+        file = self.current_dir() + storage_dir + str(int(time.time())) + '_' + str(index)
         if len(data) == 0:
+            self.failed_record(index)
             print("error request test")
             return
         data_json = self.parse(data)
         if data_json is None:
+            self.failed_record(index)
             self.save_file(file + self.get_ext_html(), data)
             return
         obj = json.loads(data_json, encoding='utf-8')
         if obj is None:
+            self.failed_record(index)
             self.save_file(file + self.get_ext_json(), data_json)
             return
         xml_data = self.parse_xml(obj)
         if not xml_data:
+            self.failed_record(index)
             self.save_file(file + self.get_ext_json(), data_json)
             return
         xml_obj = xmltodict.parse(xml_data, encoding='utf-8')
@@ -100,24 +113,62 @@ class WeChatWidgetSearchTest(TaskSet):
             if not isinstance(el, dict) or not el.get('Content', False):
                 return
             data = el['Content']
+            self.cache_test_success_case(index)
             self.save_file(file + "_query" + self.get_ext_json(), data)
         else:
+            self.failed_record(index)
             self.save_file(file + self.get_ext_xml(), xml_data)
+
+    '''
+        记录失败 案例
+    '''
+
+    def failed_record(self, index: int):
+        key = 'test_failed_cases'
+        val = self.get_failed_cases()
+        if val is None:
+            val = []
+        else:
+            if str(index) in val:
+                return
+            val.append(str(index))
+        self.cache.set(key, "\n".join(val))
+
+    '''
+        获取失败记录 id 集合
+    '''
+
+    def get_failed_cases(self):
+        key = 'test_failed_cases'
+        val = self.cache.get(key)
+        if val is None:
+            return []
+        lists = str(val.decode('utf-8')).split("\n")
+        return lists
+
+    '''
+        获取可用测试用例
+    '''
+
+    def get_test_case_index(self, index: int, max_num: int):
+        lists = self.get_failed_cases()
+        if str(index) in lists:
+            print("bad test index")
+            while True:
+                tmp = random.randint(0, max_num - 1)
+                return self.get_test_case_index(tmp, max_num)
+        return index
 
     '''
            获取缓存数据
     '''
 
-    def get_cache_file_content(self, file: str, expire=3600):
-        cache = self.file_cache.get(file, False)
-        if isinstance(cache, dict) and cache.get('content', False):
-            now_time = int(time.time())
-            cached_at = cache.get('cached_at', int(time.time()))
-            if now_time - cached_at > expire:
-                self.file_cache[file] = {}
-                return None
-            print('read in cache ' + file)
-            return cache.get('content')
+    def get_cache_file_content(self, file: str):
+        key = self.cache_file_key(file)
+        cache = self.file_cache.get(key)
+        if cache is not None:
+            cache = str(cache.decode('utf-8'))
+            return cache
         else:
             return None
 
@@ -126,6 +177,7 @@ class WeChatWidgetSearchTest(TaskSet):
     '''
 
     def load_json_file(self, file):
+        key = self.cache_file_key(file)
         cache = self.get_cache_file_content(file)
         if cache is not None:
             obj = json.loads(s=cache, encoding='utf-8')
@@ -136,17 +188,49 @@ class WeChatWidgetSearchTest(TaskSet):
             fs.close()
             if 0 == len(content):
                 return None
-            self.file_cache[file] = {
-                'content': content,
-                'cached_at': int(time.time()),
-            }
+            self.file_cache.setex(name=key, value=content, time=self.cache_time)
             obj = json.loads(s=content, encoding='utf-8')
             return obj
         else:
             return None
 
-    def __del__(self):
-        del self.file_cache, self.data
+    '''
+           缓存成功 用例数量
+    '''
+
+    def get_success_case_count(self):
+        return len(self.get_success_cases())
+
+    '''
+           缓存成功 用例 id 集合
+    '''
+
+    def cache_test_success_case(self, index: int):
+        key = self.is_finish_key
+        val = self.get_success_cases()
+        if val is None:
+            val = []
+        else:
+            if str(index) in val:
+                return
+            val.append(str(index))
+        self.cache.set(key, "\n".join(val))
+
+    '''
+      获取成功用例 id 集合
+    '''
+
+    def get_success_cases(self):
+        key = self.is_finish_key
+        val = self.cache.get(key)
+        if val is None:
+            return []
+        lists = str(val.decode('utf-8')).split("\n")
+        return lists
+
+    @staticmethod
+    def cache_file_key(file: str):
+        return "file_cache" + Redis.md5(file)
 
     @staticmethod
     def get_ext_html():
@@ -217,9 +301,14 @@ class WeChatWidgetSearchTest(TaskSet):
         if 0 == count:
             print("error : empty data case")
             exit(-1)
+        count_now = self.get_success_case_count()
+        if count_now > self.max_test_count:
+            print('測試 [ ' + str(count_now) + ' ] 案例数量已达标')
+            return
         # fs = open(self.current_dir() + "/storage/data.json", mode='w+', encoding='utf-8')
         # json.dump(data, fs, ensure_ascii=False)
         # exit(1)
+        index = self.get_test_case_index(index, count)
         data = data[index]
         # header
         header = self.header_params()
@@ -236,7 +325,7 @@ class WeChatWidgetSearchTest(TaskSet):
 
 
 '''
- 压测web server 启动类
+    压测web server 启动类
 '''
 
 

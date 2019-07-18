@@ -7,3 +7,4 @@ config/.env
 config/data.case
 config/data.json
 config/params.json
+config/data.good.case

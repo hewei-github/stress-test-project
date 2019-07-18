@@ -44,7 +44,7 @@ class DataSeeder:
             return None
         return data_list
 
-    def save(self, row_list: list):
+    def save(self, row_list: list, file=None):
         if len(row_list) == 0:
             return False
         txt = '[' + os.getenv('DATA_CASE_VAR', '#data') + ":json]\n"
@@ -65,8 +65,9 @@ class DataSeeder:
             return False
         # 保存文件
         save_file = self.curr_dir() + os.getenv(self.data_save_file_key, '/config/test.case')
-        print(save_file)
-        fs = open(file=save_file, encoding='utf-8', mode='w+')
+        if file is None:
+            file = save_file
+        fs = open(file=file, encoding='utf-8', mode='w+')
         ret = fs.write(txt)
         fs.close()
         return ret
