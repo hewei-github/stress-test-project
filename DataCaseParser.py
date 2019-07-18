@@ -16,11 +16,15 @@ class DataCaseFile:
         if 0 == len(file) or not os.path.exists(file):
             return None
         fs = open(file=file, encoding='utf-8', mode='r')
-        content = fs.read()
-        fs.close()
-        if 0 == len(content):
+        lines = []
+        while True:
+            line = fs.readline()
+            if not line:
+                fs.close()
+                break
+            lines.append(line)
+        if 0 == len(lines):
             return
-        lines = re.split(self.line_flag, content)
         return self.scope(lines)
 
     def scope(self, lines: list):
