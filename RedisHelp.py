@@ -21,10 +21,10 @@ class RedisTool(object):
 
     '''
     获取连接实例
-    @:param host :str
-    @:param port :int
-    @:param db : int
-    @:return redis.Redis
+    @param host :str
+    @param port :int
+    @param db : int
+    @return redis.Redis
     '''
 
     @classmethod
@@ -49,10 +49,10 @@ class RedisTool(object):
 
     '''
     获取连接实例
-    @:param host :str
-    @:param port :int
-    @:param db : int
-    @:return redis.Redis
+    @param host :str
+    @param port :int
+    @param db : int
+    @return redis.Redis
     '''
 
     @staticmethod
