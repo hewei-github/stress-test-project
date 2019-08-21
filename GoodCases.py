@@ -52,6 +52,7 @@ class GoodTestCase(object):
         for i, val in enumerate(lists):
             obj = json.loads(val, encoding='utf-8')
             item = obj.get('slot_list', [])
+            print(item)
             if 0 == len(item):
                 continue
             for j, it in enumerate(item):
@@ -73,7 +74,7 @@ class GoodTestCase(object):
                 tmp = city.split('市', 2)
                 if len(tmp) >= 2:
                     city = tmp[1]
-                # print(city)
+                print(city)
                 it['value'] = city
                 item[j] = it
             if val is None:
@@ -89,6 +90,8 @@ class GoodTestCase(object):
         cases = self.get_all_cases()
         ret = []
         count = len(cases)
+        if len(good) == 0 and count >0:
+            ret = cases
         for i, val in enumerate(good):
             val = int(val)
             if count > val >= 0:
