@@ -67,6 +67,13 @@ class GoodTestCase(object):
                 if len(tmp) < 2:
                     continue
                 city = tmp[0] + '区'
+                tmp = city.split('省', 2)
+                if len(tmp) >= 2:
+                    city = tmp[1]
+                tmp = city.split('市', 2)
+                if len(tmp) >= 2:
+                    city = tmp[1]
+                # print(city)
                 it['value'] = city
                 item[j] = it
             if val is None:
