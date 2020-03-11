@@ -12,6 +12,7 @@ class DataSeeder:
     env_file = "/config/.env"
     data_save_file_key = 'TEST_CASES_FILE'
     data_file_env_key = "TEST_SOURCE_DATA_FILE"
+    data_json_root_key = "DATA_JSON_ROOT"
     data_job_keys = ['gps_city', 'job_name']
     data_company_keys = ['gps_city', 'company_name']
     data_save_template = {"type": 0, "slot_list": []}
@@ -39,7 +40,7 @@ class DataSeeder:
         row = self.get_data()
         if not isinstance(row, dict):
             return None
-        data_list = row.get('data', False)
+        data_list = row.get(os.getenv(self.data_json_root_key, 'data'), False)
         if not data_list:
             return None
         return data_list
@@ -107,6 +108,12 @@ class DataSeeder:
             ret.append(item)
         return ret
 
+
+'''
+    生成测试所需用例(依据微信搜索模型)
+    1. 公司+地区
+    2. 职务+地区 
+'''
 
 if __name__ == '__main__':
     loader = DataSeeder()
