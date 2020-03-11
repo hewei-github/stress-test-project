@@ -53,7 +53,10 @@
   
   1. 使用 export_source.sql 导出相关 json 数据保存到config目录 (为何是json->方便使用),请注意看export_source.sql 中的说明    
   2. 去微信后台调试工具页页面手动调试 一次 微信搜索事件通知, 抓取对应的 cookie 值 替换config/cookie.json 中过期的旧数据    
-  3. 安装好工具所需要的依赖 (工具包括通过数据源data.json 生成测试所需数据,压测工具, 自动分析收集最优测试用例 )   
+  3. 安装好工具所需要的依赖 (工具包括通过数据源data.json 生成测试所需数据,压测工具, 自动分析收集最优测试用例 )  
+  ```bash
+    $ pip install -r requirements.txt 
+  ```  
   4. 运行 build.sh (win 平台运行 build.bat) 构建测试用例    
   5. 运行 start.py (启动压测功能,压测工具自带简易web界面)  
   6. 在压测工具的web 界面中选择压测模拟请求数量 和 压测时间    
